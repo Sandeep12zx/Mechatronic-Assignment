@@ -1,7 +1,9 @@
 #include <Keypad.h>
 #include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
+#include <ThingSpeak.h>
 
-// Keypad setup
+
 const byte ROWS = 4;
 const byte COLS = 4;
 char keys[ROWS][COLS] = {
@@ -14,13 +16,20 @@ byte rowPins[ROWS] = {9, 8, 7, 6};
 byte colPins[COLS] = {5, 4, 3, 2};
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-// LCD setup
-LiquidCrystal_I2C lcd(0x27, 16, 2); // Replace 0x27 with your LCD's I2C address
 
-// Buzzer setup
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 const int buzzerPin = 16;
 
-// Variables
+
+#define ESP8266_RX 10
+#define ESP8266_TX 11
+SoftwareSerial esp8266(ESP8266_RX, ESP8266_TX);
+
+
+unsigned long channelNumber = 2925282;
+const char *writeAPIKey = "8TAM28G9G2Y7ZCUT";  
+
 String input = "";
 String display = "";
 float result = 0;
@@ -32,10 +41,14 @@ void setup() {
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  lcd.print("Calculator");
+  lcd.print("Scientific Calc");
   delay(2000);
   lcd.clear();
   pinMode(buzzerPin, OUTPUT);
+
+  esp8266.begin(115200);
+  ThingSpeak.begin(esp8266);
+  connectWiFi();
 }
 
 void loop() {
@@ -45,23 +58,23 @@ void loop() {
     if (key >= '0' && key <= '9') {
       input += key;
       display += key;
-    } else if (key == 'A') { // Addition
+    } else if (key == 'A') {
       performOperation('+');
-    } else if (key == 'B') { // Subtraction
+    } else if (key == 'B') {
       performOperation('-');
-    } else if (key == 'C') { // Multiplication
+    } else if (key == 'C') {
       performOperation('*');
-    } else if (key == 'D') { // Division
+    } else if (key == 'D') {
       performOperation('/');
-    } else if (key == '#') { // Equals
-      calculate();
-    } else if (key == '*') { // Clear
+    } else if (key == '#') {
+      calculateAndSendToThingSpeak();
+    } else if (key == '*') {
       clearCalculator();
-    } else if (key == '1') { // Square root
+    } else if (key == '1') {
       performFunction(sqrt);
-    } else if (key == '2') { // Factorial
+    } else if (key == '2') {
       performFunction(factorial);
-    } else if (key == '3') { // Logarithm
+    } else if (key == '3') {
       performFunction(log);
     }
    
@@ -84,7 +97,7 @@ void performFunction(float (*func)(float)) {
   }
 }
 
-void calculate() {
+void calculateAndSendToThingSpeak() {
   if (input != "") {
     result = evaluateExpression(input);
     if (isnan(result)) {
@@ -93,6 +106,7 @@ void calculate() {
       input = String(result);
       addToHistory();
       beep();
+      sendToThingSpeak(result);
     }
   }
 }
@@ -137,14 +151,24 @@ float factorial(float n) {
 }
 
 float evaluateExpression(String expr) {
-  // Complex expression evaluation would go here
-  // This is a simplified version
   return 0;
 }
 
+void connectWiFi() {
+  while (WiFi.status() != WL_CONNECTED) {
+    WiFi.begin("Shantanu", "kq1q2/r2");
+    delay(5000);
+  }
+  Serial.println("Connected to Wi-Fi");
+}
 
+void sendToThingSpeak(float value) {
+  ThingSpeak.setField(1, value);
+  int x = ThingSpeak.writeFields(2925282, 8TAM28G9G2Y7ZCUT);
+  if (x == 200) {
+    Serial.println("Data sent to ThingSpeak successfully.");
+  } else {
+    Serial.println("Failed to send data to ThingSpeak.");
+  }
+}
 
-
-
-
-///this is the software link: https://wokwi.com/projects/428388575819235329
